@@ -171,7 +171,7 @@ const RTE_DEPS_LIBS: &[&str] = &["numa", "pcap"];
 fn bind(path: &Path) {
     cc::Build::new()
         .file("src/shim.c")
-        .flag("-march=corei7-avx")
+        .flag("-march=broadwell")
         .compile("rte_shim");
 
     bindgen::Builder::default()
@@ -181,16 +181,21 @@ fn bind(path: &Path) {
         // treat as opaque as per issue w/ combining align/packed:
         // https://github.com/rust-lang/rust-bindgen/issues/1538
         .opaque_type(r"rte_arp_ipv4|rte_arp_hdr")
-        .whitelist_type(r"(rte|eth|pcap)_.*")
-        .whitelist_function(r"(_rte|rte|eth|numa|pcap)_.*")
-        .whitelist_var(r"(RTE|DEV|ETH|MEMPOOL|PKT|rte)_.*")
+        .allowlist_type(r"(rte|eth|pcap)_.*")
+        .allowlist_function(r"(_rte|rte|eth|numa|pcap)_.*")
+        .allowlist_var(r"(RTE|DEV|ETH|MEMPOOL|PKT|rte)_.*")
+        .opaque_type("vmbus_bufring")
+        .opaque_type("rte_avp_desc")
+        .opaque_type("rte_.*_hdr")
+        .opaque_type("rte_arp_ipv")
+        .opaque_type("__*")
         .derive_copy(true)
         .derive_debug(true)
         .derive_default(true)
         .derive_partialeq(true)
         .default_enum_style(bindgen::EnumVariation::ModuleConsts)
         .clang_arg("-finline-functions")
-        .clang_arg("-march=corei7-avx")
+        .clang_arg("-march=broadwell")
         .rustfmt_bindings(true)
         .generate()
         .expect("Unable to generate bindings")
