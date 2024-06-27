@@ -90,7 +90,6 @@
 //!
 //! ### Examples
 //!
-//! - [kni]: Kernel NIC interface example.
 //! - [nat64]: IPv6 to IPv4 NAT gateway example.
 //! - [ping4d]: Ping4 daemon example.
 //! - [pktdump]: Packet dump example.
@@ -110,7 +109,6 @@
 //! [README]: https://github.com/capsule-rs/capsule/blob/master/README.md
 //! [sandbox repo]: https://github.com/capsule-rs/sandbox
 //! [`metrics`]: crate::metrics
-//! [kni]: https://github.com/capsule-rs/capsule/tree/master/examples/kni
 //! [nat64]: https://github.com/capsule-rs/capsule/tree/master/examples/nat64
 //! [ping4d]: https://github.com/capsule-rs/capsule/tree/master/examples/ping4d
 //! [pktdump]: https://github.com/capsule-rs/capsule/tree/master/examples/pktdump
@@ -139,7 +137,7 @@ mod runtime;
 #[cfg_attr(docsrs, doc(cfg(feature = "testils")))]
 pub mod testils;
 
-pub use self::dpdk::{KniRx, KniTxQueue, Mbuf, PortQueue, SizeOf};
+pub use self::dpdk::{Mbuf, PortQueue, SizeOf};
 pub use self::runtime::{Runtime, UnixSignal};
 pub use capsule_macros::SizeOf;
 #[cfg(any(test, feature = "testils"))]

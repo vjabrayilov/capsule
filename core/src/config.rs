@@ -255,11 +255,6 @@ impl RuntimeConfig {
 
         eal_args
     }
-
-    /// Returns the number of KNI enabled ports
-    pub(crate) fn num_knis(&self) -> usize {
-        self.ports.iter().filter(|p| p.kni).count()
-    }
 }
 
 impl fmt::Debug for RuntimeConfig {
@@ -367,12 +362,6 @@ pub struct PortConfig {
     /// to `true`.
     #[serde(default = "default_multicast_mode")]
     pub multicast: bool,
-
-    /// Whether kernel NIC interface is enabled for this port. with KNI, this
-    /// port can exchange packets with the kernel networking stack. Defaults
-    /// to `false`.
-    #[serde(default)]
-    pub kni: bool,
 }
 
 fn default_port_rxd() -> usize {
@@ -400,7 +389,6 @@ impl fmt::Debug for PortConfig {
             .field("txd", &self.txd)
             .field("promiscuous", &self.promiscuous)
             .field("multicast", &self.multicast)
-            .field("kni", &self.kni)
             .finish()
     }
 }
@@ -453,7 +441,6 @@ mod tests {
         assert_eq!(default_port_txd(), config.ports[0].txd);
         assert_eq!(false, config.ports[0].promiscuous);
         assert_eq!(default_multicast_mode(), config.ports[0].multicast);
-        assert_eq!(false, config.ports[0].kni);
     }
 
     #[test]

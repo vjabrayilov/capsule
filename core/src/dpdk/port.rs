@@ -16,7 +16,7 @@
 * SPDX-License-Identifier: Apache-2.0
 */
 
-use super::{CoreId, Kni, KniBuilder, KniTxQueue, Mbuf, Mempool, MempoolMap, SocketId};
+use super::{CoreId, Mbuf, Mempool, MempoolMap, SocketId};
 use crate::dpdk::DpdkError;
 use crate::ffi::{self, AsStr, ToCString, ToResult};
 #[cfg(feature = "metrics")]
@@ -112,7 +112,6 @@ pub struct PortQueue {
     port_id: PortId,
     rxq: RxQueueIndex,
     txq: TxQueueIndex,
-    kni: Option<KniTxQueue>,
     #[cfg(feature = "metrics")]
     received: Option<Counter>,
     #[cfg(feature = "metrics")]
@@ -128,7 +127,6 @@ impl PortQueue {
             port_id: port,
             rxq,
             txq,
-            kni: None,
         }
     }
 
@@ -138,7 +136,6 @@ impl PortQueue {
             port_id: port,
             rxq,
             txq,
-            kni: None,
             received: None,
             transmitted: None,
             dropped: None,
@@ -202,16 +199,6 @@ impl PortQueue {
                 break;
             }
         }
-    }
-
-    /// Returns a handle to send packets to the associated KNI interface.
-    pub fn kni(&self) -> Option<&KniTxQueue> {
-        self.kni.as_ref()
-    }
-
-    /// Sets the TX queue for the KNI interface.
-    fn set_kni(&mut self, kni: KniTxQueue) {
-        self.kni = Some(kni);
     }
 
     /// Sets the per queue counters. Some device drivers don't track TX
@@ -284,7 +271,6 @@ pub(crate) struct Port {
     name: String,
     device: String,
     queues: HashMap<CoreId, PortQueue>,
-    kni: Option<Kni>,
     dev_info: ffi::rte_eth_dev_info,
 }
 
@@ -310,11 +296,6 @@ impl Port {
     /// Returns the available port queues.
     pub(crate) fn queues(&self) -> &HashMap<CoreId, PortQueue> {
         &self.queues
-    }
-
-    /// Returns the KNI.
-    pub(crate) fn kni(&mut self) -> Option<&mut Kni> {
-        self.kni.as_mut()
     }
 
     /// Starts the port. This is the final step before packets can be
@@ -498,12 +479,7 @@ impl<'a> PortBuilder<'a> {
 
     /// Creates the `Port`.
     #[allow(clippy::cognitive_complexity)]
-    pub(crate) fn finish(
-        &mut self,
-        promiscuous: bool,
-        multicast: bool,
-        with_kni: bool,
-    ) -> anyhow::Result<Port> {
+    pub(crate) fn finish(&mut self, promiscuous: bool, multicast: bool) -> anyhow::Result<Port> {
         let len = self.cores.len() as u16;
         let mut conf = ffi::rte_eth_conf::default();
 
@@ -536,18 +512,6 @@ impl<'a> PortBuilder<'a> {
 
         // the socket determines which pool to allocate mbufs from.
         let mempool = self.mempools.get_raw(socket_id)?;
-
-        // if the port has kni enabled, we will allocate an interface.
-        let kni = if with_kni {
-            let kni = KniBuilder::new(mempool)
-                .name(&self.name)
-                .port_id(self.port_id)
-                .mac_addr(super::eth_macaddr_get(self.port_id.raw()))
-                .finish()?;
-            Some(kni)
-        } else {
-            None
-        };
 
         let mut queues = HashMap::new();
 
@@ -610,10 +574,6 @@ impl<'a> PortBuilder<'a> {
 
             let mut q = PortQueue::new(self.port_id, rxq, txq);
 
-            if let Some(kni) = &kni {
-                q.set_kni(kni.txq());
-            }
-
             #[cfg(feature = "metrics")]
             q.set_counters(&self.name, core_id);
 
@@ -644,7 +604,6 @@ impl<'a> PortBuilder<'a> {
             name: self.name.clone(),
             device: self.device.clone(),
             queues,
-            kni,
             dev_info: self.dev_info,
         })
     }

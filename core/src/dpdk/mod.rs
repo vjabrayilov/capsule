@@ -16,7 +16,6 @@
 * SPDX-License-Identifier: Apache-2.0
 */
 
-mod kni;
 mod mbuf;
 mod mempool;
 mod port;
@@ -24,7 +23,6 @@ mod port;
 mod stats;
 
 #[allow(unreachable_pub)] // https://github.com/rust-lang/rust/issues/57411
-pub use self::kni::*;
 #[allow(unreachable_pub)]
 pub use self::mbuf::*;
 pub(crate) use self::mempool::*;

@@ -414,8 +414,8 @@ pub trait Pipeline: futures::Future<Output = ()> {
 ///
 /// ```
 /// Runtime::build(config)?
-///     .add_pipeline_to_port("kni0", |q| {
-///         batch::splice(q.clone(), q.kni().unwrap().clone())
+///     .add_pipeline_to_port("port0", |q| {
+///         batch::splice(q.clone())
 ///     });
 /// ```
 ///

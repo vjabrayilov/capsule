@@ -22,9 +22,7 @@ pub(crate) use self::core_map::*;
 
 use crate::batch::Pipeline;
 use crate::config::RuntimeConfig;
-use crate::dpdk::{
-    self, CoreId, KniError, KniRx, Mempool, Port, PortBuilder, PortError, PortQueue,
-};
+use crate::dpdk::{self, CoreId, Mempool, Port, PortBuilder, PortError, PortQueue};
 use crate::{debug, ensure, info};
 use anyhow::Result;
 use futures::{future, stream, StreamExt};
@@ -107,12 +105,6 @@ impl Runtime {
             .mempools(&mut mempools)
             .finish()?;
 
-        let len = config.num_knis();
-        if len > 0 {
-            info!("initializing KNI subsystem...");
-            dpdk::kni_init(len)?;
-        }
-
         info!("initializing ports...");
         let mut ports = vec![];
         for conf in config.ports.iter() {
@@ -120,7 +112,7 @@ impl Runtime {
                 .cores(&conf.cores)?
                 .mempools(&mut mempools)
                 .rx_tx_queue_capacity(conf.rxd, conf.txd)?
-                .finish(conf.promiscuous, conf.multicast, conf.kni)?;
+                .finish(conf.promiscuous, conf.multicast)?;
 
             debug!(?port);
             ports.push(port);
@@ -147,14 +139,6 @@ impl Runtime {
     fn get_port(&self, name: &str) -> Result<&Port> {
         self.ports
             .iter()
-            .find(|p| p.name() == name)
-            .ok_or_else(|| PortError::NotFound(name.to_owned()).into())
-    }
-
-    #[inline]
-    fn get_port_mut(&mut self, name: &str) -> Result<&mut Port> {
-        self.ports
-            .iter_mut()
             .find(|p| p.name() == name)
             .ok_or_else(|| PortError::NotFound(name.to_owned()).into())
     }
@@ -259,64 +243,6 @@ impl Runtime {
         }
 
         info!("installed pipeline for port {}.", port.name());
-
-        Ok(self)
-    }
-
-    /// Installs a pipeline to a KNI enabled port to receive packets coming
-    /// from the kernel. This pipeline will run on a randomly select core
-    /// that's assigned to the port.
-    ///
-    /// # Remarks
-    ///
-    /// This function has be to invoked once per port. Otherwise the packets
-    /// coming from the kernel will be silently dropped. For the most common
-    /// use case where the application only needs simple packet forwarding,
-    /// use [`batch::splice`] to join the kernel's RX with the port's TX.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// Runtime::build(config)?
-    ///     .add_add_pipeline_to_port("kni0", install)?
-    ///     .add_kni_rx_pipeline_to_port("kni0", batch::splice)?
-    ///     .execute()
-    /// ```
-    ///
-    /// [`batch::splice`]: crate::batch::splice
-    pub fn add_kni_rx_pipeline_to_port<T: Pipeline + 'static, F>(
-        &mut self,
-        port: &str,
-        installer: F,
-    ) -> Result<&mut Self>
-    where
-        F: FnOnce(KniRx, PortQueue) -> T + Send + Sync + 'static,
-    {
-        // takes ownership of the kni rx handle.
-        let kni_rx = self
-            .get_port_mut(port)?
-            .kni()
-            .ok_or(KniError::Disabled)?
-            .take_rx()?;
-
-        // selects a core to run a rx pipeline for this port. the selection is
-        // randomly choosing the last core we find. if the port has more than one
-        // core assigned, this will be different from the core that's running the
-        // tx pipeline.
-        let port = self.get_port(port)?;
-        let core_id = port.queues().keys().last().unwrap();
-        let port_q = port.queues()[core_id].clone();
-        let thread = &self.get_core(*core_id)?.thread;
-
-        // spawns the bootstrap. we want the bootstrapping to execute on the
-        // target core instead of the master core.
-        thread.spawn(future::lazy(move |_| {
-            let fut = installer(kni_rx, port_q);
-            debug!("spawned kni rx pipeline {}.", fut.name());
-            current_thread::spawn(fut);
-        }))?;
-
-        info!("installed kni rx pipeline for port {}.", port.name());
 
         Ok(self)
     }
@@ -513,34 +439,6 @@ impl Runtime {
         Ok(())
     }
 
-    /// Installs the KNI TX pipelines.
-    fn add_kni_tx_pipelines(&mut self) -> Result<()> {
-        let mut map = HashMap::new();
-        for port in self.ports.iter_mut() {
-            // selects a core if we need to run a tx pipeline for this port. the
-            // selection is randomly choosing the first core we find. if the port
-            // has more than one core assigned, this will be different from the
-            // core that's running the rx pipeline.
-            let core_id = *port.queues().keys().next().unwrap();
-
-            // if the port is kni enabled, then we will take ownership of the
-            // tx handle.
-            if let Some(kni) = port.kni() {
-                map.insert(core_id, kni.take_tx()?);
-            }
-        }
-
-        // spawns all the pipelines.
-        for (core_id, kni_tx) in map.into_iter() {
-            let thread = &self.get_core(core_id)?.thread;
-            thread.spawn(kni_tx.into_pipeline())?;
-
-            info!("installed kni tx pipeline on {:?}.", core_id);
-        }
-
-        Ok(())
-    }
-
     /// Starts all the ports to receive packets.
     fn start_ports(&mut self) -> Result<()> {
         for port in self.ports.iter_mut() {
@@ -583,7 +481,6 @@ impl Runtime {
 
     /// Executes the pipeline(s) until a stop signal is received.
     pub fn execute(&mut self) -> Result<()> {
-        self.add_kni_tx_pipelines()?;
         self.start_ports()?;
         self.unpark_cores();
 
@@ -618,12 +515,6 @@ impl Drop for Runtime {
             ManuallyDrop::drop(&mut self.ports);
             ManuallyDrop::drop(&mut self.mempools);
         }
-
-        if self.config.num_knis() > 0 {
-            debug!("freeing KNI subsystem.");
-            dpdk::kni_close();
-        }
-
         debug!("freeing EAL.");
         dpdk::eal_cleanup().unwrap();
     }

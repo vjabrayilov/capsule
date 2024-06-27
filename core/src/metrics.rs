@@ -16,7 +16,7 @@
 * SPDX-License-Identifier: Apache-2.0
 */
 
-//! Exposes framework metrics, including port, kni, mempool, and pipeline
+//! Exposes framework metrics, including port, mempool, and pipeline
 //! metrics.
 //!
 //! # Port Metrics
@@ -36,19 +36,6 @@
 //! either RX or TX. `port.packets` and `port.dropped` are tracked per core
 //! and labeled with the core id. The others are tracked by only the overall
 //! metrics.
-//!
-//!
-//! # KNI Metrics
-//!
-//! * `kni.packets`, total number of successfully received or transmitted
-//! packets.
-//! * `kni.octets`, total number of successfully received or transmitted bytes.
-//! * `kni.dropped`, total number of packets dropped because the transmit
-//! queue is full.
-//!
-//! Each metric is labeled with the KNI interface name and a direction, which
-//! can be either RX or TX.
-//!
 //!
 //! # Mempool Metrics
 //!
