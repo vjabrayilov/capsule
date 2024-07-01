@@ -149,7 +149,7 @@ impl Mbuf {
     pub fn new() -> Result<Self> {
         let mempool = MEMPOOL.with(|tls| tls.get());
         let raw =
-            unsafe { ffi::_rte_pktmbuf_alloc(mempool).into_result(|_| MempoolError::Exhausted)? };
+            unsafe { ffi::rte_pktmbuf_alloc(mempool).into_result(|_| MempoolError::Exhausted)? };
 
         Ok(Mbuf {
             inner: MbufInner::Original(raw),
@@ -433,7 +433,7 @@ impl Mbuf {
         let mempool = MEMPOOL.with(|tls| tls.get());
 
         let mbufs = unsafe {
-            ffi::_rte_pktmbuf_alloc_bulk(mempool, ptrs.as_mut_ptr(), len as raw::c_uint)
+            ffi::rte_pktmbuf_alloc_bulk(mempool, ptrs.as_mut_ptr(), len as raw::c_uint)
                 .into_result(DpdkError::from_errno)?;
 
             ptrs.set_len(len);
@@ -470,7 +470,7 @@ impl Drop for Mbuf {
             MbufInner::Original(_) => {
                 trace!("freeing mbuf@{:p}.", self.raw().buf_addr);
                 unsafe {
-                    ffi::_rte_pktmbuf_free(self.raw_mut());
+                    ffi::rte_pktmbuf_free(self.raw_mut());
                 }
             }
             MbufInner::Clone(_) => (),

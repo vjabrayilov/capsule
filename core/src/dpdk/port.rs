@@ -18,12 +18,15 @@
 
 use super::{CoreId, Mbuf, Mempool, MempoolMap, SocketId};
 use crate::dpdk::DpdkError;
-use crate::ffi::{self, AsStr, ToCString, ToResult};
+use crate::ffi::constants::{RTE_ETH_RSS_IP, RTE_ETH_RSS_SCTP, RTE_ETH_RSS_TCP, RTE_ETH_RSS_UDP};
+use crate::ffi::{
+    self,
+    constants::{RTE_ETH_MQ_RX_RSS_FLAG, RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE},
+    AsStr, ToCString, ToResult,
+};
 #[cfg(feature = "metrics")]
 use crate::metrics::{labels, Counter, SINK};
 use crate::net::MacAddr;
-#[cfg(feature = "pcap-dump")]
-use crate::pcap;
 use crate::{debug, ensure, info, warn};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -32,8 +35,7 @@ use std::os::raw;
 use std::ptr;
 use thiserror::Error;
 
-const DEFAULT_RSS_HF: u64 =
-    (ffi::ETH_RSS_IP | ffi::ETH_RSS_TCP | ffi::ETH_RSS_UDP | ffi::ETH_RSS_SCTP) as u64;
+const DEFAULT_RSS_HF: u64 = RTE_ETH_RSS_IP | RTE_ETH_RSS_TCP | RTE_ETH_RSS_UDP | RTE_ETH_RSS_SCTP;
 
 /// An opaque identifier for an Ethernet device port.
 #[derive(Copy, Clone)]
@@ -148,7 +150,7 @@ impl PortQueue {
         let mut ptrs = Vec::with_capacity(RX_BURST_MAX);
 
         let len = unsafe {
-            ffi::_rte_eth_rx_burst(
+            ffi::rte_eth_rx_burst(
                 self.port_id.0,
                 self.rxq.0,
                 ptrs.as_mut_ptr(),
@@ -174,7 +176,7 @@ impl PortQueue {
         loop {
             let to_send = ptrs.len() as u16;
             let sent = unsafe {
-                ffi::_rte_eth_tx_burst(self.port_id.0, self.txq.0, ptrs.as_mut_ptr(), to_send)
+                ffi::rte_eth_tx_burst(self.port_id.0, self.txq.0, ptrs.as_mut_ptr(), to_send)
             };
 
             if sent > 0 {
@@ -388,7 +390,8 @@ impl<'a> PortBuilder<'a> {
         let port_id = PortId(port_id);
         debug!("{} is {:?}.", name, port_id);
 
-        let mut dev_info = ffi::rte_eth_dev_info::default();
+        let mut dev_info: ffi::rte_eth_dev_info = unsafe { std::mem::zeroed() };
+
         unsafe {
             ffi::rte_eth_dev_info_get(port_id.0, &mut dev_info);
         }
@@ -481,18 +484,18 @@ impl<'a> PortBuilder<'a> {
     #[allow(clippy::cognitive_complexity)]
     pub(crate) fn finish(&mut self, promiscuous: bool, multicast: bool) -> anyhow::Result<Port> {
         let len = self.cores.len() as u16;
-        let mut conf = ffi::rte_eth_conf::default();
+        let mut conf: ffi::rte_eth_conf = unsafe { std::mem::zeroed() };
 
         // turns on receive side scaling if port has multiple cores.
         if len > 1 {
-            conf.rxmode.mq_mode = ffi::rte_eth_rx_mq_mode::ETH_MQ_RX_RSS;
+            conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS_FLAG;
             conf.rx_adv_conf.rss_conf.rss_hf =
                 DEFAULT_RSS_HF & self.dev_info.flow_type_rss_offloads;
         }
 
         // turns on optimization for fast release of mbufs.
-        if self.dev_info.tx_offload_capa & ffi::DEV_TX_OFFLOAD_MBUF_FAST_FREE as u64 > 0 {
-            conf.txmode.offloads |= ffi::DEV_TX_OFFLOAD_MBUF_FAST_FREE as u64;
+        if self.dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE as u64 > 0 {
+            conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE as u64;
             debug!("turned on optimization for fast release of mbufs.");
         }
 
@@ -553,23 +556,6 @@ impl<'a> PortBuilder<'a> {
                     ptr::null(),
                 )
                 .into_result(DpdkError::from_errno)?;
-            }
-
-            #[cfg(feature = "pcap-dump")]
-            {
-                pcap::capture_queue(
-                    self.port_id,
-                    self.name.as_str(),
-                    core_id,
-                    RxTxQueue::Rx(rxq),
-                )?;
-
-                pcap::capture_queue(
-                    self.port_id,
-                    self.name.as_str(),
-                    core_id,
-                    RxTxQueue::Tx(txq),
-                )?;
             }
 
             let mut q = PortQueue::new(self.port_id, rxq, txq);

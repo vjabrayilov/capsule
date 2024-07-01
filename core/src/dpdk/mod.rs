@@ -60,7 +60,7 @@ impl DpdkError {
     #[inline]
     fn from_errno(errno: raw::c_int) -> Self {
         let errno = if errno == -1 {
-            unsafe { ffi::_rte_errno() }
+            unsafe { ffi::per_lcore__rte_errno }
         } else {
             -errno
         };
@@ -137,7 +137,10 @@ impl CoreId {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     #[inline]
     pub fn socket_id(&self) -> SocketId {
-        unsafe { SocketId(ffi::numa_node_of_cpu(self.0 as raw::c_int)) }
+        unsafe {
+            let rte_lcore_to_socket_id = ffi::rte_lcore_to_socket_id(self.0 as raw::c_uint);
+            SocketId(rte_lcore_to_socket_id as i32)
+        }
     }
 
     /// Returns the raw value.
@@ -156,8 +159,10 @@ impl CoreId {
             // hence it is safe to transmute between them.
             let mut set: libc::cpu_set_t = mem::zeroed();
             libc::CPU_SET(self.0, &mut set);
-            let mut set: ffi::rte_cpuset_t = mem::transmute(set);
-            ffi::rte_thread_set_affinity(&mut set).into_result(DpdkError::from_errno)?;
+            // let mut set: ffi::cpu_set_t = mem::transmute(set);
+            let thread = libc::pthread_self() as i32;
+            libc::sched_setaffinity(thread, std::mem::size_of::<libc::cpu_set_t>(), &set)
+                .into_result(DpdkError::from_errno)?;
         }
 
         CURRENT_CORE_ID.with(|tls| tls.set(*self));
@@ -206,7 +211,7 @@ pub(crate) fn eal_cleanup() -> Result<()> {
 
 /// Returns the `MacAddr` of a port.
 fn eth_macaddr_get(port_id: u16) -> MacAddr {
-    let mut addr = ffi::rte_ether_addr::default();
+    let mut addr: ffi::rte_ether_addr = unsafe { mem::zeroed() };
     unsafe {
         ffi::rte_eth_macaddr_get(port_id, &mut addr);
     }
@@ -226,7 +231,7 @@ pub(crate) fn mbuf_free_bulk(mbufs: Vec<*mut ffi::rte_mbuf>) {
         } else {
             unsafe {
                 let len = to_free.len();
-                ffi::_rte_mempool_put_bulk(pool, to_free.as_ptr(), len as u32);
+                ffi::rte_mempool_put_bulk(pool, to_free.as_ptr(), len as u32);
                 to_free.set_len(0);
             }
 
@@ -236,7 +241,7 @@ pub(crate) fn mbuf_free_bulk(mbufs: Vec<*mut ffi::rte_mbuf>) {
 
     unsafe {
         let len = to_free.len();
-        ffi::_rte_mempool_put_bulk(pool, to_free.as_ptr(), len as u32);
+        ffi::rte_mempool_put_bulk(pool, to_free.as_ptr(), len as u32);
         to_free.set_len(0);
     }
 }
