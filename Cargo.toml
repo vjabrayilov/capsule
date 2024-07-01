@@ -8,6 +8,5 @@ members = [
     "examples/signals",
     "examples/skeleton",
     "examples/syn-flood",
-    "ffi",
     "macros"
 ]
