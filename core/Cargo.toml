@@ -21,7 +21,7 @@ doctest = false
 
 [dependencies]
 anyhow = "1.0"
-capsule-ffi = { version = "0.1.5", path = "../ffi" }
+rust-dpdk-sys = { git = "https://github.com/ANLAB-KAIST/rust-dpdk", branch = "main" }
 capsule-macros = { version = "0.1.5", path = "../macros" }
 clap = "2.33"
 criterion = { version = "0.3", optional = true }
