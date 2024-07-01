@@ -59,7 +59,7 @@ impl PortStats {
 
     /// Collects the port stats tracked by DPDK.
     pub(crate) fn collect(&self) -> Result<Vec<(Key, Measurement)>> {
-        let mut stats = ffi::rte_eth_stats::default();
+        let mut stats = unsafe { std::mem::zeroed() };
         unsafe {
             ffi::rte_eth_stats_get(self.id.raw(), &mut stats).into_result(DpdkError::from_errno)?;
         }
