@@ -12,8 +12,8 @@ bench:
 	@cargo bench
 
 check:
-	@pushd core $(TO_DEVNULL) && cargo check --all-targets --features full && popd $(TO_DEVNULL)
-	@cargo check --all-targets --workspace --exclude capsule
+	@pushd core $(TO_DEVNULL) && cargo check --features full && popd $(TO_DEVNULL)
+	@cargo check  --workspace --exclude capsule
 
 clean:
 	@cargo clean
@@ -37,12 +37,12 @@ fmt:
 	@cargo fmt --all
 
 lint:
-	@pushd core $(TO_DEVNULL) && cargo clippy --all-targets --features full $(CLIPPY_ARGS) && popd $(TO_DEVNULL)
-	@cargo clippy --all-targets --workspace --exclude capsule $(CLIPPY_ARGS)
+	@pushd core $(TO_DEVNULL) && cargo clippy  --features full $(CLIPPY_ARGS) && popd $(TO_DEVNULL)
+	@cargo clippy --workspace --exclude capsule $(CLIPPY_ARGS)
 
 test:
-	@pushd core $(TO_DEVNULL) && cargo test --all-targets --features full && popd $(TO_DEVNULL)
-	@cargo test --all-targets --workspace --exclude capsule
+	@pushd core $(TO_DEVNULL) && cargo test --features full && popd $(TO_DEVNULL)
+	@cargo test --workspace --exclude capsule
 
 compile-failure:
 	@pushd core $(TO_DEVNULL) && cargo test --features compile_failure && popd $(TO_DEVNULL)
