@@ -72,19 +72,10 @@
 //! capsule = { version = "0.1", features = ["testils"] }
 //! ```
 //!
-//! Or, to enable the capturing of port traffic to `pcap` files
-//! automatically per-port, per-core, you can run a Capsule application with the
-//! `pcap-dump` feature flag turned on:
-//!
-//! ```shell
-//! cargo run --features capsule/pcap-dump -- -f capsule-app.toml
-//! ```
-//!
 //! ## Feature flags
 //!
 //! - `default`: Enables metrics by default.
 //! - `metrics`: Enables automatic [`metrics`] collection.
-//! - `pcap-dump`: Enables capturing port traffic to `pcap` files.
 //! - `testils`: Enables utilities for unit testing and benchmarking.
 //! - `full`: Enables all features.
 //!
@@ -129,9 +120,6 @@ mod macros;
 pub mod metrics;
 pub mod net;
 pub mod packets;
-#[cfg(feature = "pcap-dump")]
-#[cfg_attr(docsrs, doc(cfg(feature = "pcap-dump")))]
-mod pcap;
 mod runtime;
 #[cfg(any(test, feature = "testils"))]
 #[cfg_attr(docsrs, doc(cfg(feature = "testils")))]
